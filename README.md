@@ -1,1 +1,1 @@
-# LeagueOfLegendsBOT
+# League Of Legends insta-locker
