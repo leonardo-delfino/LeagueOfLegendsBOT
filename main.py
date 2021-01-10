@@ -1,39 +1,159 @@
 import os
-import time
 import requests
+import urllib3
+import time
 from base64 import b64encode
-from constants import *
+from json_parser import create_champions_hashmap
 
-# check if the client is running
-lockfile_path = LEAGUE_PATH + "\lockfile"
-lockfile = None
-lockfile_exists = False
-while not lockfile_exists:
-    if os.path.isfile(lockfile_path):
-        lockfile = open(lockfile_path, "r")
-        lockfile_exists = True
-    time.sleep(5)
 
-# read the lockfile data
-lockfile_data = lockfile.read()
-lockfile_list = lockfile_data.split(":")
+def parse_lockfile():
+    # check if the client is running
+    league_path = "E:\Riot Games\League of Legends"
+    lockfile_path = league_path + "\lockfile"
+    lockfile = None
+    lockfile_exists = False
 
-print(lockfile_list)
+    print("Waiting for the client to start")
+    while not lockfile_exists:
+        if os.path.isfile(lockfile_path):
+            lockfile = open(lockfile_path, "r")
+            lockfile_exists = True
+    # read the lockfile data
+    lockfile_data = lockfile.read()
+    lockfile_list = lockfile_data.split(":")
 
-process_name = lockfile_list[0]
-process_pid = lockfile_list[1]
-league_port = lockfile_list[2]
+    lockfile.close()
 
-host = "127.0.0.1"
-username = "riot"
-password = lockfile_list[3]
+    return lockfile_list
 
-lockfile.close()
 
-# prepare the request
-password_b64 = b64encode(bytes("{}:{}".format(username, password), "utf-8")).decode("ascii")
-headers = {'Authorization': 'Basic {}'.format(password_b64)}
-print(headers['Authorization'])
+def make_request(session, method, path, parameters, data=None, query=''):
+    if not query:
+        url = "{}://127.0.0.1:{}{}".format(parameters[4], parameters[2], path)
+    else:
+        url = "{}://127.0.0.1:{}{}?{}".format(parameters[4], parameters[2], path, query)
 
-# make the request
-session = requests.session()
+    return getattr(session, method)(url, verify=False, headers=headers, json=data)
+
+
+def get_owned_champions():
+    pass
+
+
+if __name__ == '__main__':
+    champions_key = create_champions_hashmap()
+    pick_priority = [
+        'Pyke',
+        'Thresh',
+        'Blitzcrank',
+        'Shen',
+        'Morgana'
+    ]
+    ban_priority = [
+        'Morgana',
+        'Samira',
+        'Leona',
+        'Nautilus',
+        'MasterYi'
+    ]
+
+    username = "riot"
+    # 0. process name
+    # 1. process pid
+    # 2. port
+    # 3. password
+    # 4. protocol
+    request_parameters = parse_lockfile()
+
+    # prepare the request
+    password_b64 = b64encode(bytes("{}:{}".format(username, request_parameters[3]), "utf-8")).decode("ascii")
+    headers = {'Authorization': 'Basic {}'.format(password_b64)}
+    print(headers['Authorization'])
+
+    # login session
+    urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    session = requests.session()
+    while True:
+        req = make_request(session, 'get', '/lol-login/v1/session', request_parameters)
+
+        if req.status_code != 200:
+            continue
+
+        if req.json()['state'] == "SUCCEEDED":
+            break
+
+    account_id = req.json()['accountId']
+    summoner_id = req.json()['summonerId']
+    champions_owned = []
+    champions = []
+    while True:
+        req = make_request(session, 'get', '/lol-champions/v1/owned-champions-minimal', request_parameters)
+
+        print(req.status_code)
+        if req.status_code == 200:
+            champions = req.json()
+            break
+
+    for champion in champions:
+        if not champion['active']:
+            continue
+        champions_owned.append(champion['alias'])
+
+    print(champions_owned)
+
+    picks = []
+    for champ_alias in pick_priority:
+        if champ_alias not in champions_owned:
+            pass
+        else:
+            picks.append(champions_key[champ_alias])
+
+    lock = False
+    if lock:
+        print("locking")
+    else:
+        print("picking")
+
+    champion_index = 0
+    ban_index = 0
+    champion_locked = False
+    while True:
+        time.sleep(0.5)
+        req = make_request(session, 'get', '/lol-gameflow/v1/gameflow-phase', request_parameters)
+
+        if req.status_code != 200:
+            continue
+
+        phase = req.json()
+        print(phase)
+
+        if phase == "Lobby":
+            json = {'positionPref': ['UTILITY', 'MIDDLE']}
+            make_request(session, 'put', '/lol-lobby/v1/parties/metadata', request_parameters, json)
+            time.sleep(1)
+
+            # start the queue
+            make_request(session, 'post', '/lol-lobby/v2/lobby/matchmaking/search', request_parameters)
+
+        elif phase == "ReadyCheck":
+            time.sleep(1)
+            make_request(session, 'post', '/lol-matchmaking/v1/ready-check/accept', request_parameters)
+
+        elif phase == "ChampSelect":
+            r = make_request(session, 'get', '/lol-champ-select/v1/session', request_parameters)
+
+            if r.status_code != 200:
+                continue
+
+            data = r.json()
+
+            actor_cell_id = None
+            for x in data['myTeam']:
+                if x['summonerId'] == summoner_id:
+                    actor_cell_id = x['cellId']
+            if actor_cell_id == -1:
+                continue
+
+            for action in data['actions'][0]:
+                if actor_cell_id != action['actorCellId']:
+                    continue

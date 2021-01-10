@@ -3,7 +3,7 @@
 Links:
 * https://michael.kim/blog/lol-client
 * https://riot-api-libraries.readthedocs.io/en/latest/ddragon.html
-* https://ddragon.leagueoflegends.com/cdn/9.3.1/data/en_US/champion.json
+* https://ddragon.leagueoflegends.com/cdn/11.1.1/data/en_US/champion.json
 * https://lcu.vivide.re/
 * https://github.com/Remlas/lolcup-tools/blob/master/AllRequests.txt
 
@@ -24,4 +24,7 @@ Flow:
 Data structures:
 * Priority list with the champions I want to pick.
 * Priority list with the champions I want to ban. (not instantly)
+
+Maybe useful things for picking a champ:
+* /lol-champ-select-legacy/v1/pickable-champions
 
