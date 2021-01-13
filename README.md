@@ -6,6 +6,10 @@ Links:
 * https://ddragon.leagueoflegends.com/cdn/11.1.1/data/en_US/champion.json
 * https://lcu.vivide.re/
 * https://github.com/Remlas/lolcup-tools/blob/master/AllRequests.txt
+* https://www.wikiwand.com/en/Chromium_Embedded_Framework
+
+Different calls:
+* JS fe (front-end) calls --- /fe/lol-things/etc
 
 A champion can be:
 * banned

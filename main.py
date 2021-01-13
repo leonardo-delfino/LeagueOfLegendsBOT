@@ -27,13 +27,18 @@ def parse_lockfile():
     return lockfile_list
 
 
-def make_request(session, method, path, parameters, data=None, query=''):
-    if not query:
+def make_request(session, method, path, parameters, data=None, query=None):
+    if query is None:
         url = "{}://127.0.0.1:{}{}".format(parameters[4], parameters[2], path)
     else:
         url = "{}://127.0.0.1:{}{}?{}".format(parameters[4], parameters[2], path, query)
 
-    return getattr(session, method)(url, verify=False, headers=headers, json=data)
+    if data is None:
+        return getattr(session, method)(url, verify=False, headers=headers)
+    else:
+        return getattr(session, method)(url, verify=False, headers=headers, json=data)
+
+
 
 
 def get_owned_champions():
@@ -43,11 +48,10 @@ def get_owned_champions():
 if __name__ == '__main__':
     champions_key = create_champions_hashmap()
     pick_priority = [
-        'Pyke',
-        'Thresh',
+        'Draven',
+        'Darius',
         'Blitzcrank',
         'Shen',
-        'Morgana'
     ]
     ban_priority = [
         'Morgana',
@@ -117,8 +121,11 @@ if __name__ == '__main__':
     champion_index = 0
     ban_index = 0
     champion_locked = False
+
+    planning = False
+
     while True:
-        time.sleep(0.5)
+        time.sleep(3)
         req = make_request(session, 'get', '/lol-gameflow/v1/gameflow-phase', request_parameters)
 
         if req.status_code != 200:
@@ -128,7 +135,7 @@ if __name__ == '__main__':
         print(phase)
 
         if phase == "Lobby":
-            json = {'positionPref': ['UTILITY', 'MIDDLE']}
+            json = {'positionPref': ['BOTTOM', 'UTILITY']}
             make_request(session, 'put', '/lol-lobby/v1/parties/metadata', request_parameters, json)
             time.sleep(1)
 
@@ -147,13 +154,37 @@ if __name__ == '__main__':
 
             data = r.json()
 
-            actor_cell_id = None
+            actor_cell_id = -1
             for x in data['myTeam']:
                 if x['summonerId'] == summoner_id:
                     actor_cell_id = x['cellId']
+
             if actor_cell_id == -1:
                 continue
 
             for action in data['actions'][0]:
                 if actor_cell_id != action['actorCellId']:
                     continue
+
+                # if data['timer']['phase'] == "BAN_PICK":
+                json_data = {'championId': champions_key['Pyke']}
+
+                if action['championId'] == 0:
+                    r1 = make_request(session, 'patch', '/lol-champ-select/v1/session/actions/{}'
+                                      .format(action['id']), request_parameters, None, json_data)
+                    time.sleep(3)
+                    print("fiero proprio")
+
+                    if not action['completed']:
+                        r2 = make_request(session, 'post', '/lol-champ-select/v1/session/actions/{}/complete'
+                                          .format(action['id']), request_parameters, None, json_data)
+
+                """
+                if data['timer']['phase'] == "PLANNING" and not planning:
+                    r1 = make_request(session, 'patch', '/lol-champ-select/v1/session/actions/{}'.format(action['id']),
+                                      request_parameters, {'championId': champions_key['Pyke']})
+                    planning = True
+                """
+
+                if data['timer']['phase'] == "FINALIZATION":
+                    exit(0)
